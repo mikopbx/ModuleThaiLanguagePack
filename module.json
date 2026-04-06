@@ -1,0 +1,21 @@
+{
+  "developer":"MIKO",
+  "moduleUniqueID":"ModuleThaiLanguagePack",
+  "support_email": "help@miko.ru",
+  "version": "%ModuleVersion%",
+  "min_pbx_version": "2025.1.1",
+  "module_type": "languagepack",
+  "language_code": "th-th",
+  "translation_sync": {
+    "enabled": true,
+    "source_repo": "mikopbx/Core",
+    "source_branch": "develop",
+    "language_code": "th",
+    "exclude_files": ["ModuleThaiLanguagePack.php"]
+  },
+  "release_settings": {
+    "publish_release": true,
+    "changelog_enabled": true,
+    "create_github_release": true
+  }
+}
