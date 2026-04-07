@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /*
  * MikoPBX - free phone system for small business
- * Copyright © 2017-2025 Alexey Portnov and Nikolay Beketov
+ * Copyright © 2017-2026 Alexey Portnov and Nikolay Beketov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
