@@ -1,6 +1,9 @@
 <div class="ui segment">
+    <div id="languagepack-sounds-progress" class="ui segment" style="margin-bottom: 1em;"></div>
+
     <div class="ui labels" style="margin-bottom: 1em;">
-        <a class="ui basic label">
+        <a class="ui basic label"
+           href="{{ url('module-thai-language-pack/module-thai-language-pack/sounds') }}">
             <i class="microphone icon"></i> {{ soundFileCount }}
             {{ t._('mlp_th_SoundFiles') }}
         </a>

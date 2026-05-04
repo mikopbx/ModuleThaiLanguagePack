@@ -88,6 +88,35 @@ class ModuleThaiLanguagePackController extends BaseController
         $this->view->translationFileCount = $translationFileCount;
         $this->view->translationStringCount = $translationStringCount;
 
+        // Conversion-progress widget on the overview page so the user sees
+        // it before navigating to General Settings to switch language.
+        $footer = $this->assets->collection('footerJS');
+        $footer->addJs("js/cache/{$this->moduleUniqueID}/module-thai-language-pack-sounds-api.js", true);
+        $footer->addJs("js/cache/{$this->moduleUniqueID}/module-thai-language-pack-progress.js", true);
+
         $this->view->pick('Modules/' . $this->moduleUniqueID . '/' . $this->moduleUniqueID . '/index');
     }
+
+    /**
+     * Renders the sound files browser page (DataTable + conversion progress).
+     */
+    public function soundsAction(): void
+    {
+        $this->view->moduleUniqueID = $this->moduleUniqueID;
+
+        $footer = $this->assets->collection('footerJS');
+        $footer->addJs('js/vendor/datatable/dataTables.semanticui.js', true);
+        $footer->addJs('js/vendor/range/range.min.js', true);
+        $footer->addJs('js/pbx/main/pbx-data-table-index.js', true);
+        $footer->addJs('js/pbx/SoundFiles/sound-files-index-player.js', true);
+        $footer->addJs("js/cache/{$this->moduleUniqueID}/module-thai-language-pack-sounds-api.js", true);
+        $footer->addJs("js/cache/{$this->moduleUniqueID}/module-thai-language-pack-sounds-index.js", true);
+
+        $headerCss = $this->assets->collection('headerCSS');
+        $headerCss->addCss('css/vendor/datatable/dataTables.semanticui.min.css', true);
+        $headerCss->addCss('css/vendor/range/range.css', true);
+
+        $this->view->pick('Modules/' . $this->moduleUniqueID . '/' . $this->moduleUniqueID . '/sounds');
+    }
+
 }
