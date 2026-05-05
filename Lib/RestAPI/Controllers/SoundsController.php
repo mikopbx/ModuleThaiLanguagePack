@@ -83,32 +83,94 @@ class SoundsController extends ModulesControllerBase
         $rows = [];
         $convertedCount = 0;
 
+        // Source/shipped audio formats. WebM is excluded — it's a derived
+        // browser-preview format produced by WorkerSoundFilesInit, never an
+        // input shipped by the module.
+        $sourceExtensions = ['wav', 'gsm', 'mp3', 'ulaw', 'alaw', 'g722', 'sln', 'opus'];
+        // Browser-playable formats in priority order (preferred for the inline
+        // player). webm/Opus is far smaller and lighter than .wav, so we pick
+        // it whenever WorkerSoundFilesInit has produced one alongside the
+        // source. .wav remains a legacy fallback (some packs ship .wav as the
+        // source — TTS-generated language packs in particular).
+        $playableExtensions = ['webm', 'wav'];
+
         if (is_dir($baseDir)) {
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($baseDir, RecursiveDirectoryIterator::SKIP_DOTS)
             );
             $baseDirLen = strlen($baseDir) + 1;
+            // Group files by basename-without-extension so the listing has one
+            // logical row per sound, even though WorkerSoundFilesInit produces
+            // 7+ codec variants per file on disk.
+            $bySoundKey = [];
             foreach ($iterator as $file) {
-                if (!$file->isFile() || strtolower($file->getExtension()) !== 'wav') {
+                if (!$file->isFile()) {
+                    continue;
+                }
+                $ext = strtolower($file->getExtension());
+                if (!in_array($ext, $sourceExtensions, true)) {
                     continue;
                 }
                 $absolutePath = $file->getPathname();
                 $relativePath = substr($absolutePath, $baseDirLen);
-                $metaFile = $file->getPath() . '/.' . $file->getBasename('.wav') . '.sound-meta';
+                $relNoExt = preg_replace('/\.[^.]+$/', '', $relativePath);
+                // Prefer a .wav source row over a .gsm one when both exist for
+                // the same logical sound: .wav rows are easier to read and the
+                // legacy fallback for the player anyway. Otherwise keep first
+                // hit (alphabetical by extension, deterministic).
+                $existing = $bySoundKey[$relNoExt] ?? null;
+                if ($existing !== null && $ext !== 'wav') {
+                    continue;
+                }
+                $bySoundKey[$relNoExt] = [
+                    'absolutePath' => $absolutePath,
+                    'relativePath' => $relativePath,
+                    'relNoExt'     => $relNoExt,
+                    'sizeBytes'    => $file->getSize(),
+                    'sourceDir'    => $file->getPath(),
+                    'baseName'     => pathinfo($absolutePath, PATHINFO_FILENAME),
+                ];
+            }
+
+            foreach ($bySoundKey as $entry) {
+                $absolutePath = $entry['absolutePath'];
+                $relativePath = $entry['relativePath'];
+                $sourceDir = $entry['sourceDir'];
+                $baseName = $entry['baseName'];
+
+                $metaFile = $sourceDir . '/.' . $baseName . '.sound-meta';
                 $converted = is_file($metaFile);
                 if ($converted) {
                     $convertedCount++;
                 }
-                $playUrl = '/pbxcore/api/v3/sound-files:playback?view=' . rawurlencode($absolutePath);
-                $relNoExt = preg_replace('/\.wav$/i', '', $relativePath);
+
+                // Pick the best browser-playable file for this sound:
+                // webm > wav > nothing. Source itself is fine if it's already
+                // playable. If neither exists, the JS hides the play button.
+                $playablePath = null;
+                foreach ($playableExtensions as $playExt) {
+                    $candidate = $sourceDir . '/' . $baseName . '.' . $playExt;
+                    if (is_file($candidate)) {
+                        $playablePath = $candidate;
+                        break;
+                    }
+                }
+                $playUrl = $playablePath !== null
+                    ? '/pbxcore/api/v3/sound-files:playback?view=' . rawurlencode($playablePath)
+                    : null;
+                $downloadUrl = '/pbxcore/api/v3/sound-files:playback?view='
+                    . rawurlencode($absolutePath)
+                    . '&download=1&filename=' . rawurlencode(basename($absolutePath));
+
                 $rows[] = [
                     'id'          => 'lp-' . sha1($absolutePath),
                     'name'        => $relativePath,
-                    'phrase'      => $phraseMap[$relNoExt] ?? '',
+                    'phrase'      => $phraseMap[$entry['relNoExt']] ?? '',
                     'category'    => str_contains($relativePath, '/') ? dirname($relativePath) : 'root',
-                    'sizeBytes'   => $file->getSize(),
+                    'sizeBytes'   => $entry['sizeBytes'],
                     'playUrl'     => $playUrl,
-                    'downloadUrl' => $playUrl . '&download=1&filename=' . rawurlencode($file->getFilename()),
+                    'playable'    => $playUrl !== null,
+                    'downloadUrl' => $downloadUrl,
                     'converted'   => $converted,
                 ];
             }
@@ -175,16 +237,36 @@ class SoundsController extends ModulesControllerBase
         $total = 0;
         $converted = 0;
 
+        // Mirror listAction's source-format set so progress is meaningful for
+        // packs that ship .gsm/.mp3/.opus rather than .wav.
+        $sourceExtensions = ['wav', 'gsm', 'mp3', 'ulaw', 'alaw', 'g722', 'sln', 'opus'];
+        $seenBasenames = [];
+
         if (is_dir($baseDir)) {
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($baseDir, RecursiveDirectoryIterator::SKIP_DOTS)
             );
+            $baseDirLen = strlen($baseDir) + 1;
             foreach ($iterator as $file) {
-                if (!$file->isFile() || strtolower($file->getExtension()) !== 'wav') {
+                if (!$file->isFile()) {
                     continue;
                 }
+                $ext = strtolower($file->getExtension());
+                if (!in_array($ext, $sourceExtensions, true)) {
+                    continue;
+                }
+                $relNoExt = preg_replace(
+                    '/\.[^.]+$/',
+                    '',
+                    substr($file->getPathname(), $baseDirLen)
+                );
+                if (isset($seenBasenames[$relNoExt])) {
+                    continue;
+                }
+                $seenBasenames[$relNoExt] = true;
                 $total++;
-                $metaFile = $file->getPath() . '/.' . $file->getBasename('.wav') . '.sound-meta';
+                $baseName = pathinfo($file->getPathname(), PATHINFO_FILENAME);
+                $metaFile = $file->getPath() . '/.' . $baseName . '.sound-meta';
                 if (is_file($metaFile)) {
                     $converted++;
                 }

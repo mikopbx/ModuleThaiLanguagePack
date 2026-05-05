@@ -68,6 +68,12 @@ const lpSoundsIndex = {
                     className: 'cdr-player',
                     render: (data, type, row) => {
                         if (type !== 'display') return '';
+                        // No browser-playable variant on disk yet (no .webm
+                        // and no .wav alongside the source). Show a muted
+                        // placeholder; the row stays available for download.
+                        if (!row.playable || !row.playUrl) {
+                            return '<span style="color:#999;">—</span>';
+                        }
                         const id = SecurityUtils.escapeHtml(row.id);
                         const url = SecurityUtils.escapeHtml(row.playUrl);
                         return `<table><tr>
@@ -162,10 +168,13 @@ const lpSoundsIndex = {
             },
             onDrawCallback: () => {
                 $('#languagepack-sounds-table').find('tr.file-row').each((_, tr) => {
-                    if (tr.id && typeof IndexSoundPlayer !== 'undefined') {
-                        // eslint-disable-next-line no-new
-                        new IndexSoundPlayer(tr.id);
-                    }
+                    // Skip rows that don't have a playable variant — their
+                    // cell renders a "—" placeholder instead of audio markup,
+                    // and IndexSoundPlayer would throw without an <audio>.
+                    if (!tr.id || typeof IndexSoundPlayer === 'undefined') return;
+                    if (!document.getElementById(`audio-player-${tr.id}`)) return;
+                    // eslint-disable-next-line no-new
+                    new IndexSoundPlayer(tr.id);
                 });
             },
         });
