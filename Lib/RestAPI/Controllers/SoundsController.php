@@ -327,42 +327,76 @@ class SoundsController extends ModulesControllerBase
     }
 
     /**
-     * Load the source-phrase mapping shipped with the module
-     * (`Sounds/<lang>/core-sounds-<lang>.txt`). One entry per line:
-     *   `relative/path-without-ext: Phrase text`
-     * Lines beginning with `;` are ignored. Returns an empty array if the
-     * file is missing.
+     * Build the source-phrase mapping for the module's UI.
+     *
+     * Search order, with later entries overriding earlier ones so the most
+     * specific text wins:
+     *   1. `<sounds>/en-en/core-sounds-en.txt` — Asterisk-canonical English
+     *      text shipped with every Asterisk install. Acts as graceful
+     *      fallback when the language pack ships an incomplete or skeleton
+     *      mapping file (e.g. several official packs ship `key:` lines with
+     *      no translation yet).
+     *   2. `<sounds>/<lang>/core-sounds-*.txt` — system-installed native
+     *      mapping after the module's sounds were installed.
+     *   3. `<moduleDir>/Sounds/core-sounds-<lang>.txt` — module-specific
+     *      mapping at the conventional location used by TTS-generated packs.
+     *   4. `<moduleDir>/Sounds/<lang>/core-sounds-*.txt` — module-specific
+     *      mapping in the language subdirectory used by older Asterisk-shipped
+     *      packs (filename suffix varies: `nl`, `de_DE`, etc.).
+     *
+     * Each file uses `relative/path-without-ext: Phrase text` per line; lines
+     * starting with `;` are ignored.
      *
      * @return array<string, string>
      */
     private static function loadPhraseMap(string $languageCode): array
     {
         $moduleDir = PbxExtensionUtils::getModuleDir(self::MODULE_UNIQUE_ID);
-        $mapFile = $moduleDir . '/Sounds/core-sounds-' . $languageCode . '.txt';
-        if (!is_file($mapFile)) {
-            return [];
+        $systemSoundsDir = Directories::getDir(Directories::AST_VAR_LIB_DIR) . '/sounds';
+
+        $candidatePaths = [
+            // 1. English fallback — always present on a configured PBX.
+            $systemSoundsDir . '/en-en/core-sounds-en.txt',
+        ];
+        // 2. System-installed native mapping (any *.txt file in the lang dir).
+        $sysGlob = glob($systemSoundsDir . '/' . $languageCode . '/core-sounds-*.txt') ?: [];
+        foreach ($sysGlob as $p) {
+            $candidatePaths[] = $p;
         }
+        // 3. Module-shipped conventional mapping.
+        $candidatePaths[] = $moduleDir . '/Sounds/core-sounds-' . $languageCode . '.txt';
+        // 4. Module-shipped native mapping inside lang subdir.
+        $modGlob = glob($moduleDir . '/Sounds/' . $languageCode . '/core-sounds-*.txt') ?: [];
+        foreach ($modGlob as $p) {
+            $candidatePaths[] = $p;
+        }
+
         $map = [];
-        $handle = fopen($mapFile, 'rb');
-        if ($handle === false) {
-            return [];
-        }
-        while (($line = fgets($handle)) !== false) {
-            $line = rtrim($line, "\r\n");
-            if ($line === '' || $line[0] === ';') {
+        foreach ($candidatePaths as $mapFile) {
+            if (!is_file($mapFile)) {
                 continue;
             }
-            $colon = strpos($line, ':');
-            if ($colon === false) {
+            $handle = @fopen($mapFile, 'rb');
+            if ($handle === false) {
                 continue;
             }
-            $key = trim(substr($line, 0, $colon));
-            $value = trim(substr($line, $colon + 1));
-            if ($key !== '' && $value !== '') {
-                $map[$key] = $value;
+            while (($line = fgets($handle)) !== false) {
+                $line = rtrim($line, "\r\n");
+                if ($line === '' || $line[0] === ';') {
+                    continue;
+                }
+                $colon = strpos($line, ':');
+                if ($colon === false) {
+                    continue;
+                }
+                $key = trim(substr($line, 0, $colon));
+                $value = trim(substr($line, $colon + 1));
+                if ($key !== '' && $value !== '') {
+                    $map[$key] = $value; // later sources override earlier ones
+                }
             }
+            fclose($handle);
         }
-        fclose($handle);
         return $map;
     }
 
