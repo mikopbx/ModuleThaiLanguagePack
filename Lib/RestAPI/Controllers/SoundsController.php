@@ -85,14 +85,17 @@ class SoundsController extends ModulesControllerBase
 
         // Source/shipped audio formats. WebM is excluded — it's a derived
         // browser-preview format produced by WorkerSoundFilesInit, never an
-        // input shipped by the module.
-        $sourceExtensions = ['wav', 'gsm', 'mp3', 'ulaw', 'alaw', 'g722', 'sln', 'opus'];
+        // input shipped by the module. wav16/wav48 are HD-wav variants
+        // (16 kHz / 48 kHz) supported by MikoPBX-patched format_wav.so —
+        // language packs ship one of these so Asterisk can play them
+        // immediately without waiting for the codec-conversion worker.
+        $sourceExtensions = ['wav', 'wav16', 'wav48', 'gsm', 'mp3', 'ulaw', 'alaw', 'g722', 'sln', 'opus'];
         // Browser-playable formats in priority order (preferred for the inline
-        // player). webm/Opus is far smaller and lighter than .wav, so we pick
-        // it whenever WorkerSoundFilesInit has produced one alongside the
-        // source. .wav remains a legacy fallback (some packs ship .wav as the
-        // source — TTS-generated language packs in particular).
-        $playableExtensions = ['webm', 'wav'];
+        // player). webm/Opus is the lightest (.opus in WebM container, ~30 KB
+        // for a 1-sec clip). wav16/wav48 are the new module-shipped HD-wav
+        // formats. Legacy .wav (8 kHz or 22 kHz) remains a fallback for older
+        // packs.
+        $playableExtensions = ['webm', 'wav16', 'wav48', 'wav'];
 
         if (is_dir($baseDir)) {
             $iterator = new RecursiveIteratorIterator(
@@ -238,8 +241,8 @@ class SoundsController extends ModulesControllerBase
         $converted = 0;
 
         // Mirror listAction's source-format set so progress is meaningful for
-        // packs that ship .gsm/.mp3/.opus rather than .wav.
-        $sourceExtensions = ['wav', 'gsm', 'mp3', 'ulaw', 'alaw', 'g722', 'sln', 'opus'];
+        // packs that ship .gsm/.mp3/.opus or HD-wav variants.
+        $sourceExtensions = ['wav', 'wav16', 'wav48', 'gsm', 'mp3', 'ulaw', 'alaw', 'g722', 'sln', 'opus'];
         $seenBasenames = [];
 
         if (is_dir($baseDir)) {
