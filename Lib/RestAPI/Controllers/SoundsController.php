@@ -290,7 +290,14 @@ class SoundsController extends ModulesControllerBase
         $running = self::isWorkerRunning();
         $percent = $total > 0 ? (int) round(($converted / $total) * 100) : 0;
 
-        if ($moduleDone) {
+        // Treat the module as "completed" as soon as every .wav has its
+        // .sound-meta sibling, even if the global worker is still busy on
+        // another module's conversion. Otherwise the UI keeps the "wait
+        // before switching language" warning visible long after this
+        // particular pack is fully converted.
+        if ($total > 0 && $converted === $total) {
+            $stage = 'completed';
+        } elseif ($moduleDone) {
             $stage = 'completed';
         } elseif ($running) {
             $stage = 'converting';
